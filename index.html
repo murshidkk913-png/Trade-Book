@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TradeBook Journal</title>
+<style>
+body{margin:0;background:#081018;color:#fff;font:16px Arial;padding:18px}
+h1{color:#34d399}h2{font-size:21px}
+.card{background:#14212d;border:1px solid #293b4c;border-radius:14px;padding:16px;margin:12px 0}
+button{background:#126b52;color:white;border:0;border-radius:9px;padding:12px;margin:4px;cursor:pointer}
+input,select,textarea{width:100%;box-sizing:border-box;background:#09131d;color:white;border:1px solid #35485a;border-radius:8px;padding:12px;margin:6px 0 12px}
+label{color:#aab9c8;font-size:14px}
+.green{color:#34d399}.red{color:#fb7185}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:9px;border-bottom:1px solid #35485a;text-align:left}
+.scroll{overflow-x:auto}
+</style>
+</head>
+<body>
+<h1>TRADEBOOK</h1>
+<p>PERSONAL STOCK TRADING JOURNAL</p>
+
+<div class="card">
+<h2>Performance Overview</h2>
+<p>Net P&amp;L</p><h2 id="pnl" class="green">₹0.00</h2>
+<p>Win Rate</p><h2 id="win">0%</h2>
+<p>Total Trades</p><h2 id="count">0</h2>
+</div>
+
+<div class="card">
+<h2>＋ Add Trade</h2>
+<form id="form">
+<label>Stock Symbol</label>
+<input id="stock" placeholder="e.g. RELIANCE" required>
+<label>Trade Type</label>
+<select id="side">
+<option value="Buy">Buy</option>
+<option value="Sell">Sell / Short</option>
+</select>
+<label>Date</label>
+<input id="date" type="date" required>
+<label>Entry Price</label>
+<input id="entry" type="number" step="any" min="0.000001" required>
+<label>Exit Price</label>
+<input id="exit" type="number" step="any" min="0.000001" required>
+<label>Quantity</label>
+<input id="qty" type="number" step="any" min="0.000001" required>
+<label>Brokerage &amp; Costs</label>
+<input id="cost" type="number" min="0" step="any" value="0">
+<label>Notes</label>
+<textarea id="notes" placeholder="Trade setup and lessons learned"></textarea>
+<button type="submit">Save Trade</button>
+</form>
+</div>
+
+<div class="card">
+<h2>Trade History</h2>
+<div class="scroll">
+<table>
+<thead><tr><th>Date</th><th>Stock</th><th>P&amp;L</th><th>Action</th></tr></thead>
+<tbody id="history"></tbody>
+</table>
+</div>
+<p id="empty">No trades recorded yet.</p>
+<button onclick="backup()">Download Backup</button>
+<button onclick="exportCSV()">Export CSV</button>
+</div>
+
+<script>
+let trades=[];
+try{trades=JSON.parse(localStorage.getItem('tradebook')||'[]')}catch(e){trades=[]}
+document.getElementById('date').value=new Date().toISOString().slice(0,10);
+
+function profit(t){
+return ((t.side==='Buy'?t.exit-t.entry:t.entry-t.exit)*t.qty)-t.cost;
+}
+function save(){
+localStorage.setItem('tradebook',JSON.stringify(trades));
+render();
+}
+document.getElementById('form').addEventListener('submit',function(e){
+e.preventDefault();
+trades.push({
+id:Date.now(),
+stock:document.getElementById('stock').value.toUpperCase(),
+side:document.getElementById('side').value,
+date:document.getElementById('date').value,
+entry:+document.getElementById('entry').value,
+exit:+document.getElementById('exit').value,
+qty:+document.getElementById('qty').value,
+cost:+document.getElementById('cost').value||0,
+notes:document.getElementById('notes').value
+});
+save();
+this.reset();
+document.getElementById('date').value=new Date().toISOString().slice(0,10);
+document.getElementById('cost').value=0;
+});
+function render(){
+let total=trades.reduce((s,t)=>s+profit(t),0);
+let wins=trades.filter(t=>profit(t)>0).length;
+document.getElementById('pnl').textContent='₹'+total.toFixed(2);
+document.getElementById('pnl').className=total>=0?'green':'red';
+document.getElementById('win').textContent=(trades.length?wins/trades.length*100:0).toFixed(1)+'%';
+document.getElementById('count').textContent=trades.length;
+document.getElementById('empty').style.display=trades.length?'none':'block';
+document.getElementById('history').innerHTML=trades.slice().reverse().map(t=>
+'<tr><td>'+t.date+'</td><td>'+t.stock+'</td><td class="'+(profit(t)>=0?'green':'red')+'">₹'+profit(t).toFixed(2)+'</td><td><button onclick="del('+t.id+')">Delete</button></td></tr>'
+).join('');
+}
+function del(id){
+if(confirm('Delete this trade?')){
+trades=trades.filter(t=>t.id!==id);
+save();
+}
+}
+function backup(){
+let b=new Blob([JSON.stringify(trades,null,2)],{type:'application/json'});
+let a=document.createElement('a');
+a.href=URL.createObjectURL(b);
+a.download='tradebook-backup.json';
+a.click();
+URL.revokeObjectURL(a.href);
+}
+function exportCSV(){
+let rows=[['Date','Stock','Side','Entry','Exit','Quantity','Costs','Profit/Loss']];
+trades.forEach(t=>rows.push([t.date,t.stock,t.side,t.entry,t.exit,t.qty,t.cost,profit(t)]));
+let csv=rows.map(r=>r.join(',')).join('\n');
+let a=document.createElement('a');
+a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+a.download='tradebook.csv';
+a.click();
+}
+render();
+</script>
+</body>
+</html>
